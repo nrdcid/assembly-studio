@@ -7,7 +7,7 @@ const svgElement = (tag, attributes = {}, text) => {
   return element;
 };
 
-export function createSyndromeView(root, { onInject, onRemove, onClear }) {
+export function createSyndromeView(root, { onInject, onRemove, onClear, onRound }) {
   const $ = (id) => root.querySelector(`#${id}`);
   let selection = null;
   let current = null;
@@ -41,7 +41,10 @@ export function createSyndromeView(root, { onInject, onRemove, onClear }) {
 
   function render(state) {
     current = state;
-    const { snapshot, drawing, result, errors, fresh, message = "" } = state;
+    const { snapshot, drawing, result, measurements, errors, fresh, message = "" } = state;
+    $("syndrome-summary").textContent = result
+      ? `${result.affectedChecks.length} nonzero syndromes · ${result.events.length} new detection events` : "";
+    $("syndrome-history").replaceChildren();
     const svg = $("syndrome-svg");
     svg.replaceChildren();
     svg.setAttribute("aria-disabled", String(!fresh || !result));
@@ -112,9 +115,15 @@ export function createSyndromeView(root, { onInject, onRemove, onClear }) {
       const bit = result?.syndrome[check.id] ?? 0;
       const group = interactive("check", check.id, `${check.basis} check, weight ${check.weight}, syndrome ${bit}`);
       group.dataset.syndrome = bit;
+      const detection = result?.detection[check.id] ?? 0;
+      group.dataset.detection = detection;
+      group.setAttribute("aria-label", `${group.getAttribute("aria-label")}, detection event ${detection}`);
       group.classList.add("syndrome-check", `basis-${check.basis}`);
       group.append(svgElement("polygon", { points: points.map((p) => p.join(",")).join(" ") }));
       group.append(svgElement("text", { x: cx, y: cy - 0.15, "text-anchor": "middle" }, `${check.basis}${bit ? " !" : ""}`));
+      if (detection) group.append(svgElement("text", {
+        x: cx + 0.20, y: cy + 0.10, class: "detection-marker",
+      }, "◆"));
       svg.append(group);
     }
     for (const ancilla of ancillas) {
@@ -142,7 +151,7 @@ export function createSyndromeView(root, { onInject, onRemove, onClear }) {
       const heading = document.createElement("strong");
       heading.textContent = `${selectedCheck.basis} stabilizer · ${snapshot.patch_id}`;
       const details = document.createElement("p");
-      details.textContent = `Weight ${selectedCheck.weight} · Syndrome bit ${result?.syndrome[selectedCheck.id] ?? "unavailable"}`;
+      details.textContent = `Weight ${selectedCheck.weight} · Syndrome bit ${result?.syndrome[selectedCheck.id] ?? "unavailable"} · Detection event ${result?.detection[selectedCheck.id] ?? "unavailable"}`;
       const support = document.createElement("p");
       support.textContent = `Data support: ${selectedCheck.data_qubits.join("; ")}`;
       inspector.append(heading, details, support);
@@ -170,6 +179,49 @@ export function createSyndromeView(root, { onInject, onRemove, onClear }) {
         inspector.append(note);
       }
     } else inspector.textContent = "Select a data qubit or stabilizer to inspect it.";
+    if (!fresh || !result) return;
+    const table = document.createElement("table");
+    const caption = document.createElement("caption");
+    caption.textContent = `${snapshot.patch_id} · Affected checks across patch rounds`;
+    table.append(caption);
+    const head = table.createTHead().insertRow();
+    const corner = document.createElement("th");
+    corner.textContent = "Check";
+    head.append(corner);
+    for (const row of measurements) {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = `P${row.patch_round} / G${row.round}`;
+      head.append(cell);
+    }
+    const body = table.createTBody();
+    snapshot.checks.forEach((check, index) => {
+      if (check.id !== selectedCheck?.id && !measurements.some((r) => r.syndrome[check.id] || r.detection[check.id])) return;
+      const row = body.insertRow();
+      row.dataset.historyCheck = check.id;
+      const label = document.createElement("th");
+      label.scope = "row";
+      const select = document.createElement("button");
+      select.textContent = `${check.basis}${index + 1}`;
+      select.title = check.id;
+      select.addEventListener("click", () => choose("check", check.id));
+      label.append(select);
+      row.append(label);
+      for (const measurement of measurements) {
+        const cell = row.insertCell();
+        const button = document.createElement("button");
+        const bit = measurement.syndrome[check.id];
+        const event = measurement.detection[check.id];
+        button.textContent = `${bit}${event ? " ◆" : ""}`;
+        button.dataset.historyRound = measurement.round;
+        button.setAttribute("aria-current", String(measurement.round === snapshot.round));
+        button.setAttribute("aria-label", `${check.basis}${index + 1}, patch round ${measurement.patch_round}, global round ${measurement.round}, syndrome ${bit}, detection event ${event}`);
+        button.addEventListener("click", () => onRound(measurement.round));
+        cell.append(button);
+      }
+    });
+    if (body.rows.length) $("syndrome-history").append(table);
+    else $("syndrome-history").textContent = "No affected checks in this patch's history.";
   }
   return { render };
 }

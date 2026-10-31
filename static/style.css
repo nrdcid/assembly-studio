@@ -1032,3 +1032,12 @@ pre {
 #syndrome-errors li { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
 #syndrome-errors li span { overflow-wrap: anywhere; min-width: 0; }
 #syndrome-errors button { flex-shrink: 0; }
+
+.syndrome-check .detection-marker { fill: #772b92; font-size: .18px; paint-order: stroke; stroke: white; stroke-width: .025; }
+#syndrome-summary { font-size: 12px; font-weight: 600; color: #4c3468; }
+.syndrome-history { max-width: 100%; max-height: 200px; overflow: auto; font-size: 11px; margin-top: 12px; }
+.syndrome-history table { border-collapse: collapse; width: 100%; }
+.syndrome-history caption { text-align: left; padding-bottom: 8px; }
+.syndrome-history th, .syndrome-history td { padding: 4px; white-space: nowrap; border: 1px solid var(--line); text-align: center; }
+.syndrome-history button { padding: 5px 8px; border-radius: 4px; color: #4c3468; background: #f2edf7; }
+.syndrome-history button[aria-current="true"] { outline: 2px solid #775491; }

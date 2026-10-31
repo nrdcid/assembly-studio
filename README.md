@@ -134,8 +134,22 @@ measurements. The Syndrome tab uses a dedicated SVG in the parent page. X/Z labe
 and solid/dashed borders distinguish checks, bold outlines and `!` mark syndrome
 bits of 1, and X/Y/Z markers show the accumulated error at data qubits. Ancillas
 are diamonds and cannot receive injections. Qubits and checks support keyboard
-selection with Tab and Enter/Space. Detection events and history remain planned
-for PR 4.
+selection with Tab and Enter/Space.
+
+The history table shows affected checks over the active patch's measurement
+rounds (P), alongside global timeline rounds (G). Click a cell to navigate; the
+same calculations drive scrubbing and playback. A bit of 1 means a nonzero
+syndrome; a purple ◆ marks a new detection event. A persistent error can have a
+nonzero syndrome without a new event. An identical later error cancels the frame
+and produces another event when the syndrome returns to zero.
+
+`calculateHistory(topology, errors, patchId)` returns one result per patch
+measurement, including `detection` bits and `events` with `check_id`, `patch_id`,
+`patch_round`, and global `round`. Detection is the XOR of consecutive syndromes
+of the same patch, using the ideal zero-error preparation reference `s(i,0)=0`.
+This is an idealized syndrome-change model, not a full detector model of noisy
+preparation, measurement, or logical boundaries. Interleaved measurements of
+other patches do not generate events for this patch.
 
 ## Verify
 

@@ -203,6 +203,10 @@
               <p class="syndrome-legend">X: solid red · Z: dashed blue · Bold outline + !: syndrome 1<br>
                 ● data · ◇ ancilla · X/Y/Z beside a qubit: accumulated error</p>
               <div id="syndrome-inspector" aria-live="polite"></div>
+              <p id="syndrome-summary" role="status"></p>
+              <div id="syndrome-history" class="syndrome-history" aria-label="Syndrome history"></div>
+              <p class="syndrome-legend">History: bit = syndrome · ◆ = new detection event.<br>
+                Events compare consecutive measurements of this patch, with an ideal zero-error preparation reference.</p>
               <div class="syndrome-injection">
                 <label for="inject-pauli">Pauli error</label>
                 <select id="inject-pauli"><option>X</option><option>Y</option><option>Z</option></select>

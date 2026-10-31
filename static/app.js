@@ -4,7 +4,7 @@ import {
   normaliseProject,
   deletePatch,
 } from "./state.mjs";
-import { calculateSyndrome } from "./syndrome.mjs";
+import { calculateHistory } from "./syndrome.mjs";
 import { createSyndromeView } from "./syndrome-view.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +38,12 @@ let exportFormat = "python";
 let toastTimer;
 let drag = null;
 const syndromeView = createSyndromeView($("syndrome-panel"), {
+  onRound(nextRound) {
+    if (!isFresh()) return;
+    stopPlayback();
+    round = nextRound;
+    updateRound();
+  },
   onInject(qubit, pauli, snapshot) {
     if (!isFresh()) return;
     edit((project) => {
@@ -358,15 +364,16 @@ function renderSyndrome() {
   const snapshot = compiled?.topology.find((item) => item.round === round);
   const drawing = compiled?.patches.ops.find((item) => item.round === round);
   const errors = history.current.experiment.errors;
-  let result = null, message = "";
+  let result = null, message = "", measurements = [];
   if (isFresh() && snapshot) {
     try {
-      result = calculateSyndrome(compiled.topology, errors, snapshot.patch_id, snapshot.patch_round);
+      measurements = calculateHistory(compiled.topology, errors, snapshot.patch_id);
+      result = measurements.find((item) => item.patch_round === snapshot.patch_round);
     } catch (error) {
       message = error.message + " Remove or clear invalid injections to continue.";
     }
   }
-  syndromeView.render({ snapshot, drawing, result, errors, fresh: isFresh(), message });
+  syndromeView.render({ snapshot, drawing, result, measurements, errors, fresh: isFresh(), message });
 }
 
 function switchView(view) {

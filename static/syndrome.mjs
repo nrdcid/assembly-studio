@@ -60,6 +60,11 @@ export function calculateSyndrome(topology, errors, patchId, patchRound) {
     item.patch_round === patchRound);
   if (!Number.isInteger(patchRound) || !selected)
     throw new Error("Select an existing patch measurement round.");
+  return calculateRound(selected, validated);
+}
+
+function calculateRound(selected, validated) {
+  const { patch_id: patchId, patch_round: patchRound } = selected;
   const frame = Object.fromEntries(selected.data_qubits.map((q) => [q.id, pauliToBits("I")]));
   for (const error of validated) {
     if (error.patch !== patchId || error.before_patch_round > patchRound) continue;
@@ -83,4 +88,24 @@ export function calculateSyndrome(topology, errors, patchId, patchRound) {
   }));
   return { patch_id: patchId, patch_round: patchRound, round: selected.round,
     frame, syndrome, affectedChecks: Object.keys(syndrome).filter((id) => syndrome[id] === 1).sort() };
+}
+
+// Ideal zero-error preparation reference: s(i,0) = 0. Compare measurements of
+// this patch only. These changes are not a noisy-circuit detector model.
+export function calculateHistory(topology, errors, patchId) {
+  const validated = validateErrors(topology, errors);
+  const rounds = topology.filter((item) => item.patch_id === patchId)
+    .sort((a, b) => a.patch_round - b.patch_round);
+  if (!rounds.length) throw new Error("Select a patch with measurement rounds.");
+  let previous = {};
+  return rounds.map((snapshot) => {
+    const result = calculateRound(snapshot, validated);
+    const detection = Object.fromEntries(Object.entries(result.syndrome)
+      .map(([id, bit]) => [id, bit ^ (previous[id] ?? 0)]));
+    const events = Object.keys(detection).filter((id) => detection[id]).sort()
+      .map((id) => ({ check_id: id, patch_id: patchId,
+        patch_round: snapshot.patch_round, round: snapshot.round }));
+    previous = result.syndrome;
+    return { ...result, detection, events };
+  });
 }

@@ -114,6 +114,7 @@ def main():  # noqa: PLR0915
         page.locator("#round-slider").fill("1")
         expect(page.locator('[data-check][data-syndrome="1"]')).to_have_count(0)
         page.locator("#round-slider").fill("4")
+        verify_history(page)
         artifact = Path(__file__).resolve().parents[1] / "artifacts"
         artifact.mkdir(exist_ok=True)
         page.screenshot(path=str(artifact / "syndrome-desktop.png"), full_page=True)
@@ -122,6 +123,42 @@ def main():  # noqa: PLR0915
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors, errors
         browser.close()
+
+
+def verify_history(page):
+    """History navigation and playback agree with direct round selection."""
+    page.locator("#load-example").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    page.locator("#round-slider").fill("2")
+    page.locator('[data-qubit="p0:d:2.5,2.5"]').click()
+    page.locator("#inject-pauli").select_option("X")
+    page.locator("#inject-error").click()
+    count = page.locator('[data-check][data-detection="1"]').count()
+    assert count > 0
+    expect(page.locator("[data-history-check]")).to_have_count(count)
+    page.locator("#round-slider").fill("3")
+    expect(page.locator('[data-check][data-detection="1"]')).to_have_count(0)
+    expect(page.locator('[data-check][data-syndrome="1"]')).to_have_count(count)
+    expected = page.locator("#syndrome-summary").inner_text()
+    page.locator('[data-history-round="2"]').first.click()
+    expect(page.locator("#round-value")).to_have_text("02")
+    expect(page.locator('[data-check][data-detection="1"]')).to_have_count(count)
+    page.locator("#play-rounds").click()
+    expect(page.locator("#round-value")).to_have_text("03")
+    page.locator("#play-rounds").click()
+    expect(page.locator("#tab-syndrome")).to_have_attribute("aria-selected", "true")
+    expect(page.locator("#syndrome-summary")).to_have_text(expected)
+    page.locator("#inject-error").click()
+    expect(page.locator('[data-check][data-syndrome="1"]')).to_have_count(0)
+    expect(page.locator('[data-check][data-detection="1"]')).to_have_count(count)
+    expect(page.locator('[data-history-round="3"]').first).to_have_text("0 ◆")
+    page.locator("#add-patch").click()
+    page.locator("#compile").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    page.locator("#round-slider").fill("4")
+    expect(page.locator("[data-history-check]")).to_have_count(0)
+    page.locator("#round-slider").fill("3")
+    expect(page.locator("[data-history-check]")).to_have_count(count)
 
 
 if __name__ == "__main__":

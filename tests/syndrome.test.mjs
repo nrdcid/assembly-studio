@@ -91,3 +91,40 @@ test("calculation never mutates topology, errors, or previously returned frames"
   assert.equal(JSON.stringify({topology, errors}), before);
   assert.deepEqual(calculate(errors).frame["p0:d:0"], {x:1,z:1});
 });
+
+test("history compares patch measurements and uses an ideal zero preparation reference", async () => {
+  const { calculateHistory } = await import("../static/syndrome.mjs");
+  const errors = [injection("X", "p0:d:0", 2)];
+  const history = calculateHistory([...topology].reverse(), errors, "p0");
+  assert.deepEqual(history.map(r => r.round), [1, 3, 5]);
+  assert.deepEqual(history.map(r => r.syndrome["p0:Z:a"]), [0, 1, 1]);
+  assert.deepEqual(history.map(r => r.detection["p0:Z:a"]), [0, 1, 0]);
+  assert.deepEqual(history[1].events, [{check_id:"p0:Z:a", patch_id:"p0", patch_round:2, round:3}]);
+  assert.deepEqual(history[2].events, []);
+  for (const row of history) {
+    const direct = calculate(errors, row.patch_round);
+    assert.deepEqual(row.frame, direct.frame);
+    assert.deepEqual(row.syndrome, direct.syndrome);
+  }
+  assert.ok(calculateHistory(topology, [], "p0").every(r => !r.events.length));
+  assert.ok(calculateHistory(topology, errors, "p1").every(r => !r.events.length));
+  const initial = calculateHistory(topology, [injection("X")], "p0");
+  assert.equal(initial[0].detection["p0:Z:a"], 1);
+  assert.equal(initial[1].detection["p0:Z:a"], 0);
+});
+
+test("cancellation produces a second event, and histories remain independent", async () => {
+  const { calculateHistory } = await import("../static/syndrome.mjs");
+  const errors = [injection("X", "p0:d:0", 2), injection("X", "p0:d:0", 3, "e2")];
+  const before = JSON.stringify({topology, errors});
+  const history = calculateHistory(topology, errors, "p0");
+  assert.deepEqual(history.map(r => r.syndrome["p0:Z:a"]), [0, 1, 0]);
+  assert.deepEqual(history.map(r => r.detection["p0:Z:a"]), [0, 1, 1]);
+  assert.equal(history[2].events[0].round, 5);
+  history[0].frame["p0:d:0"].x = 1;
+  history[1].syndrome["p0:Z:a"] = 0;
+  assert.equal(history[2].syndrome["p0:Z:a"], 0);
+  assert.equal(JSON.stringify({topology, errors}), before);
+  assert.throws(() => calculateHistory(topology, errors, "missing"));
+  assert.throws(() => calculateHistory(topology, [injection("X", "missing")], "p0"));
+});
