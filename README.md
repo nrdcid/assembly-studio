@@ -120,7 +120,9 @@ and persists until another error changes the frame. Interleaved rounds of other
 patches do not advance this schedule. Calculations validate all errors, including
 future injections, against compiled data-qubit references and actual patch rounds.
 Scenarios support up to 1024 injections with unique IDs and X/Y/Z Pauli types.
-The compile API also rejects invalid scenario references.
+The compile API rejects invalid scenario references. Unsupported experiment
+fields (including measurement-error, correction, or noise metadata) are rejected
+instead of silently discarded on import.
 
 Version-1 files and browser saves migrate to version 2 with `experiment.errors: []`;
 version-2 files may omit `experiment` for the same default. Browser storage keeps
@@ -128,6 +130,16 @@ its original key so existing saves remain discoverable. Experiment metadata
 survives JSON save/load and undo/redo, and never changes logical operations,
 Python/MLIR exports, or renderer payloads. Geometry edits can invalidate saved
 qubit references; compilation reports those errors rather than reassigning them.
+
+The browser compiles the assembly with an empty experiment, then validates all
+saved injections against the returned topology. This lets it display every
+invalid injection with a reason while keeping geometry available for repair.
+Invalid scenarios disable syndrome selection and injection; remove/clear and
+undo remain available. Deleted patches and removed rounds are identified
+immediately; removed data qubits are identified after recompilation. Invalid
+injections stay in saved projects so reopening a file does not lose the scenario.
+New patch IDs avoid IDs still referenced by retained injections. Import supports
+files up to 1 MB, including the maximum supported experiment size.
 
 These syndromes are idealized Pauli-frame calculations, not sampled hardware
 measurements. The Syndrome tab uses a dedicated SVG in the parent page. X/Z labels
@@ -181,3 +193,23 @@ Screenshots are saved under ignored `artifacts/`.
 The syndrome browser check covers X/Y/Z injection, compiler-derived support
 highlighting, local updates without recompilation, round scrubbing, patch isolation,
 ancilla restrictions, keyboard selection, stale previews, undo/redo, and reloads.
+It also covers cancellation events, playback/history agreement, invalid-scenario
+repair, large imports, delayed/failed compilation, and SVG agreement with d=3/d=5
+compiler plaquettes in both orientations.
+
+Phase 1 validation spans the following layers:
+
+| Layer | Coverage |
+| --- | --- |
+| Python topology | Stable identities, data-only boundary support, independent d=3/d=5 generators |
+| Compiler integration | X/Z orientations, independent/interleaved patches, JavaScript syndrome agreement |
+| Node engine | Pauli algebra, timing, cancellation, patch isolation, histories and detection events |
+| API | Schema/reference rejection, deterministic compilation, unchanged Python/MLIR exports |
+| Browser | Selection, support geometry, overlays, scrubbing/playback, stale previews and scenario repair |
+| Persistence | v1 migration, v2 experiments, undo/redo, download/import and reload |
+
+To reproduce the pilot: load the memory example, open Syndrome, choose round 2,
+select a data qubit, and inject X. Overlapping Z checks show syndrome 1 and a ◆
+event. At round 3 those syndromes persist with no new event. Inject X on the same
+qubit at round 3 to cancel the error: the syndromes return to 0 and a new ◆ appears.
+Save/reopen the project to retain the injections; logical exports remain unchanged.

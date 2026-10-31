@@ -25,6 +25,7 @@ export function normaliseErrors(errors) {
   const ids = new Set();
   return errors.map((error) => {
     if (!error || typeof error !== "object" ||
+        Object.keys(error).some((key) => !["id", "patch", "qubit", "pauli", "before_patch_round"].includes(key)) ||
         typeof error.id !== "string" || !error.id.length || error.id.length > 128 ||
         ids.has(error.id) || typeof error.patch !== "string" ||
         !/^[A-Za-z][A-Za-z0-9_]{0,31}$/.test(error.patch) ||
@@ -41,15 +42,23 @@ export function normaliseErrors(errors) {
 
 export function validateErrors(topology, errors) {
   const validated = normaliseErrors(errors);
-  for (const error of validated) {
+  const issues = findErrorIssues(topology, validated);
+  if (issues.length) throw new Error(issues.map((issue) => `Error ${issue.id}: ${issue.message}`).join(" "));
+  return validated;
+}
+
+export function findErrorIssues(topology, errors) {
+  return normaliseErrors(errors).flatMap((error) => {
+    if (!topology.some((item) => item.patch_id === error.patch))
+      return [{ id: error.id, message: `Unknown patch ${error.patch} or no measurement rounds.` }];
     const target = topology.find((item) => item.patch_id === error.patch &&
       item.patch_round === error.before_patch_round);
     if (!target)
-      throw new Error(`Error ${error.id}: unknown patch or invalid injection round.`);
+      return [{ id: error.id, message: `Invalid patch round ${error.before_patch_round}.` }];
     if (!target.data_qubits.some((q) => q.id === error.qubit))
-      throw new Error(`Error ${error.id}: unknown data qubit ${error.qubit}.`);
-  }
-  return validated;
+      return [{ id: error.id, message: `Unknown data qubit ${error.qubit}.` }];
+    return [];
+  });
 }
 
 // Query any patch measurement directly. Recomputing from injections makes scrubbing

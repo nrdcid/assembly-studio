@@ -99,3 +99,22 @@ test("v2 experiment is optional but malformed experiments cannot be silently los
   }
   assert.throws(() => normaliseProject({...project, version: 1, experiment: {errors: [error]}}));
 });
+
+test("deleted patches and shortened lifetimes are diagnosed without deleting experiments", async () => {
+  const { projectErrorIssues, nextPatchId } = await import("../static/state.mjs");
+  const project = memoryExample();
+  project.experiment.errors = [{...error, before_patch_round: 3}];
+  project.operations[1].rounds = 2;
+  assert.match(projectErrorIssues(project)[0].message, /round/);
+  deletePatch(project, "p0");
+  assert.equal(project.experiment.errors.length, 1);
+  assert.match(projectErrorIssues(project)[0].message, /patch/);
+  assert.equal(nextPatchId(project), "p1");
+  assert.deepEqual(normaliseProject(JSON.parse(JSON.stringify(project))).experiment, project.experiment);
+});
+
+test("unsupported measurement and correction metadata cannot disappear on import", () => {
+  for (const injection of [{...error, kind: "measurement"}, {...error, correction: true}])
+    assert.throws(() => normaliseProject({...memoryExample(), experiment: {errors: [injection]}}));
+  assert.throws(() => normaliseProject({...memoryExample(), experiment: {errors: [], noise: 0.01}}));
+});

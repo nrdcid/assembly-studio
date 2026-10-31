@@ -84,6 +84,7 @@ export function normaliseProject(value) {
   const experiment = Object.hasOwn(value, "experiment")
     ? value.experiment : { errors: [] };
   if (!experiment || typeof experiment !== "object" || Array.isArray(experiment)) fail();
+  if (Object.keys(experiment).some((key) => key !== "errors")) fail();
   const errors = normaliseErrors(experiment.errors);
   // Pick only project fields; never persist UI state or generated output.
   return {
@@ -110,6 +111,28 @@ export function normaliseProject(value) {
 export function deletePatch(project, id) {
   project.patches = project.patches.filter((patch) => patch.id !== id);
   project.operations = project.operations.filter((op) => op.patch !== id);
+}
+
+// Preserve invalid injections so users can undo the edit or explicitly remove
+// them. Patch/round problems can be reported before new geometry is compiled.
+export function projectErrorIssues(project) {
+  return project.experiment.errors.flatMap((error) => {
+    if (!project.patches.some((patch) => patch.id === error.patch))
+      return [{ id: error.id, message: `Unknown patch ${error.patch}.` }];
+    const rounds = project.operations.filter((op) => op.patch === error.patch && op.kind === "memory")
+      .reduce((sum, op) => sum + op.rounds, 0);
+    if (error.before_patch_round > rounds)
+      return [{ id: error.id, message: `Invalid patch round ${error.before_patch_round}; this patch has ${rounds} rounds.` }];
+    return [];
+  });
+}
+
+export function nextPatchId(project) {
+  const used = new Set([...project.patches.map((p) => p.id),
+    ...project.experiment.errors.map((error) => error.patch)]);
+  let index = 0;
+  while (used.has(`p${index}`)) index++;
+  return `p${index}`;
 }
 
 export function createHistory(project) {

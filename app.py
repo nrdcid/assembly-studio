@@ -166,6 +166,22 @@ class Project(StrictModel):
             raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def valid_experiment_references(self) -> "Project":
+        """Reject missing patches and rounds before invoking the compiler."""
+        rounds = dict.fromkeys((patch.id for patch in self.patches), 0)
+        for operation in self.operations:
+            if operation.kind == "memory":
+                rounds[operation.patch] += operation.rounds
+        for error in self.experiment.errors:
+            if error.patch not in rounds:
+                msg = f"Error {error.id}: unknown patch {error.patch!r}."
+                raise ValueError(msg)
+            if error.before_patch_round > rounds[error.patch]:
+                msg = f"Error {error.id}: invalid patch round {error.before_patch_round}."
+                raise ValueError(msg)
+        return self
+
 
 def build_program(project: Project):
     """Build a fresh compiler program and matching executable Python export."""

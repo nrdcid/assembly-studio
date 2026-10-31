@@ -131,3 +131,23 @@ def test_javascript_syndromes_agree_with_compiler_support(project, distance, ver
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("mutation", [{"patch": "deleted"}, {"before_patch_round": 4}])
+def test_project_validation_rejects_scenario_lifetime_references(project, mutation):
+    value = scenario(project)
+    value["experiment"]["errors"][0].update(mutation)
+    with pytest.raises(ValidationError, match="e1"):
+        Project.model_validate(value)
+
+
+def test_shrinking_patch_rejects_removed_data_qubit_without_reassignment(project, client):
+    value = scenario(project)
+    value["patches"][0].update(width=5, height=5)
+    value["experiment"]["errors"][0]["qubit"] = "p0:d:4.5,4.5"
+    assert client.post("/api/compile", json=value).status_code == 200
+    value["patches"][0].update(width=3, height=3)
+    response = client.post("/api/compile", json=value)
+    assert response.status_code == 422
+    assert "e1" in response.text
+    assert "4.5,4.5" in response.text

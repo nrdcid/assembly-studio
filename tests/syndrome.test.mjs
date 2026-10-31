@@ -128,3 +128,16 @@ test("cancellation produces a second event, and histories remain independent", a
   assert.throws(() => calculateHistory(topology, errors, "missing"));
   assert.throws(() => calculateHistory(topology, [injection("X", "missing")], "p0"));
 });
+
+test("invalid scenario diagnostics identify every injection without silently dropping it", async () => {
+  const { findErrorIssues } = await import("../static/syndrome.mjs");
+  const errors = [injection("X", "missing", 1), injection("Z", "p0:d:0", 4, "e2"),
+    injection("Y", "p2:d:0", 1, "e3", "p2")];
+  const before = JSON.stringify(errors);
+  const issues = findErrorIssues(topology, errors);
+  assert.deepEqual(issues.map(i => i.id), ["e1", "e2", "e3"]);
+  assert.match(issues[0].message, /data qubit/);
+  assert.match(issues[1].message, /round/);
+  assert.match(issues[2].message, /patch/);
+  assert.equal(JSON.stringify(errors), before);
+});

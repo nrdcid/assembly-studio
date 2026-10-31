@@ -3,8 +3,10 @@ import {
   memoryExample,
   normaliseProject,
   deletePatch,
+  projectErrorIssues,
+  nextPatchId,
 } from "./state.mjs";
-import { calculateHistory } from "./syndrome.mjs";
+import { calculateHistory, findErrorIssues } from "./syndrome.mjs";
 import { createSyndromeView } from "./syndrome-view.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -273,10 +275,11 @@ async function compile() {
       const response = await fetch("/api/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(project),
+        // Compile geometry even when saved injections need repair. Validate the
+        // current experiment below against the returned authoritative topology.
+        body: JSON.stringify({ ...project, experiment: { errors: [] } }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(errorMessage(result));
       if (source !== currentSource()) {
         status(
           "Uncompiled changes",
@@ -285,6 +288,7 @@ async function compile() {
         );
         return false;
       }
+      if (!response.ok) throw new Error(errorMessage(result));
       compiled = result;
       compiledSource = source;
       round = Math.min(round, compiled.rounds);
@@ -364,8 +368,12 @@ function renderSyndrome() {
   const snapshot = compiled?.topology.find((item) => item.round === round);
   const drawing = compiled?.patches.ops.find((item) => item.round === round);
   const errors = history.current.experiment.errors;
+  const issues = isFresh()
+    ? findErrorIssues(compiled.topology, errors)
+    : projectErrorIssues(history.current);
   let result = null, message = "", measurements = [];
-  if (isFresh() && snapshot) {
+  if (issues.length) message = "Invalid injections are listed below. Undo the assembly edit or remove them to continue.";
+  if (isFresh() && snapshot && !issues.length) {
     try {
       measurements = calculateHistory(compiled.topology, errors, snapshot.patch_id);
       result = measurements.find((item) => item.patch_round === snapshot.patch_round);
@@ -373,7 +381,7 @@ function renderSyndrome() {
       message = error.message + " Remove or clear invalid injections to continue.";
     }
   }
-  syndromeView.render({ snapshot, drawing, result, measurements, errors, fresh: isFresh(), message });
+  syndromeView.render({ snapshot, drawing, result, measurements, errors, issues, fresh: isFresh(), message });
 }
 
 function switchView(view) {
@@ -486,9 +494,8 @@ $("delete-patch").addEventListener("click", () =>
 );
 $("add-patch").addEventListener("click", () => {
   const project = history.current;
-  let index = 0;
-  while (project.patches.some((p) => p.id === `p${index}`)) index++;
-  const id = `p${index}`;
+  const id = nextPatchId(project);
+  const index = Number(id.slice(1));
   let position;
   for (let y = 2; y <= 28 && !position; y += 4)
     for (let x = 2; x <= 28 && !position; x += 4) {
@@ -751,8 +758,8 @@ $("project-file").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    if (file.size > 100000)
-      throw new Error("Project files must be smaller than 100 KB.");
+    if (file.size > 1000000)
+      throw new Error("Project files must be smaller than 1 MB.");
     const project = normaliseProject(JSON.parse(await file.text()));
     edit((current) => {
       Object.assign(current, project);

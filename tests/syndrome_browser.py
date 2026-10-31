@@ -2,6 +2,7 @@
 """Exercise the interactive syndrome view against actual compiler output."""
 
 import argparse
+import json
 from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
@@ -114,7 +115,13 @@ def main():  # noqa: PLR0915
         page.locator("#round-slider").fill("1")
         expect(page.locator('[data-check][data-syndrome="1"]')).to_have_count(0)
         page.locator("#round-slider").fill("4")
+        artifact = Path(__file__).resolve().parents[1] / "artifacts"
+        artifact.mkdir(exist_ok=True)
         verify_history(page)
+        page.screenshot(path=str(artifact / "syndrome-history.png"), full_page=True)
+        verify_lifecycle(page)
+        verify_compiler_geometry(page)
+        verify_pending_compile(page)
         artifact = Path(__file__).resolve().parents[1] / "artifacts"
         artifact.mkdir(exist_ok=True)
         page.screenshot(path=str(artifact / "syndrome-desktop.png"), full_page=True)
@@ -159,6 +166,145 @@ def verify_history(page):
     expect(page.locator("[data-history-check]")).to_have_count(0)
     page.locator("#round-slider").fill("3")
     expect(page.locator("[data-history-check]")).to_have_count(count)
+
+
+def verify_lifecycle(page):
+    """Invalid experiments remain visible, repairable, and persistent."""
+    page.locator("#load-example").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    page.locator("#patch-width").select_option("5")
+    page.locator("#compile").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    page.locator('[data-qubit="p0:d:6.5,2.5"]').click()
+    page.locator("#inject-error").click()
+    page.locator("#patch-width").select_option("3")
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "true")
+    page.locator("#compile").click()
+    expect(page.locator(".injection-issue")).to_contain_text("Unknown data qubit")
+    expect(page.locator("#inject-error")).to_be_disabled()
+    page.reload()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    page.locator("#tab-syndrome").click()
+    expect(page.locator(".injection-issue")).to_contain_text("Unknown data qubit")
+    page.locator("[data-remove-error]").click()
+    expect(page.locator(".injection-issue")).to_have_count(0)
+    page.locator("#round-slider").fill("3")
+    page.locator("[data-qubit]").first.click()
+    page.locator("#inject-error").click()
+    page.locator("[data-edit-rounds]").fill("2")
+    page.locator("[data-edit-rounds]").press("Tab")
+    expect(page.locator(".injection-issue")).to_contain_text("round 3")
+    page.locator("#undo").click()
+    expect(page.locator(".injection-issue")).to_have_count(0)
+    expect(page.locator("#inject-error")).to_be_enabled()
+    page.locator("#redo").click()
+    page.locator("#compile").click()
+    expect(page.locator(".injection-issue")).to_contain_text("round 3")
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "true")
+    page.locator("#delete-patch").click()
+    expect(page.locator(".injection-issue")).to_contain_text("Unknown patch p0")
+    page.locator("#add-patch").click()
+    expect(page.locator("#selected-id")).to_have_text("p1")
+    page.locator("#compile").click()
+    expect(page.locator(".injection-issue")).to_contain_text("Unknown patch p0")
+    page.locator("#clear-errors").click()
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "false")
+    # A maximal supported experiment can exceed the old 100 KB upload limit.
+    project = page.evaluate("JSON.parse(localStorage.getItem('assembly-studio.project.v1'))")
+    qubit = page.locator("[data-qubit]").first.get_attribute("data-qubit")
+    project["experiment"]["errors"] = [
+        {
+            "id": f"error_{index:04d}_" + "a" * 100,
+            "patch": "p1",
+            "qubit": qubit,
+            "pauli": "X",
+            "before_patch_round": 1,
+        }
+        for index in range(1024)
+    ]
+    payload = json.dumps(project).encode()
+    assert len(payload) > 100000
+    page.locator("#project-file").set_input_files(
+        {"name": "large.json", "mimeType": "application/json", "buffer": payload}
+    )
+    expect(page.locator("#syndrome-errors li")).to_have_count(1024)
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    page.locator("#clear-errors").click()
+
+
+def verify_compiler_geometry(page):
+    """Compare SVG vertices and highlighted data support to real plaquettes."""
+    page.locator("#load-example").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    for distance in [3, 5]:
+        for orientation in ["true", "false"]:
+            page.locator("#patch-width").select_option(str(distance))
+            page.locator("#patch-height").select_option(str(distance))
+            page.locator("#patch-orientation").select_option(orientation)
+            page.locator("#compile").click()
+            expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+            mismatches = page.evaluate("""async () => {
+                const project = JSON.parse(localStorage.getItem('assembly-studio.project.v1'));
+                const compiled = await fetch('/api/compile', {method:'POST',
+                    headers:{'Content-Type':'application/json'}, body:JSON.stringify(project)}
+                ).then(r => r.json());
+                const raw = compiled.patches.ops[0];
+                const snapshot = compiled.topology[0];
+                const positions = new Map(snapshot.data_qubits.map(q => [q.id, q.position]));
+                const qubits = new Map(raw.qubits.map(q => [q.id, q]));
+                const canonical = points => points.map(p => p.join(',')).sort().join(';');
+                const mismatches = [];
+                for (const p of raw.patches[0].plaquettes) {
+                    const points = p.coordinates.map(id => qubits.get(id).coordinates);
+                    const support = p.coordinates.filter(id => qubits.get(id).type === 'data')
+                        .map(id => qubits.get(id).coordinates);
+                    const basis = p.colour === 'red' ? 'X' : 'Z';
+                    const group = [...document.querySelectorAll('[data-check]')].find(g =>
+                        g.classList.contains('basis-' + basis) &&
+                        canonical([...g.querySelector('polygon').points].map(p => [p.x, p.y]))
+                            === canonical(points));
+                    if (!group) { mismatches.push('Missing compiler polygon'); continue; }
+                    group.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+                    const highlighted = [...document.querySelectorAll('[data-qubit].in-support')]
+                        .map(q => positions.get(q.dataset.qubit));
+                    if (canonical(highlighted) !== canonical(support))
+                        mismatches.push('Incorrect support');
+                }
+                return mismatches;
+            }""")
+            assert mismatches == []
+
+
+def verify_pending_compile(page):
+    """An older compile response cannot enable interaction after a newer edit."""
+    pending = []
+
+    def hold_response(route):
+        pending.append(route)
+
+    page.route("**/api/compile", hold_response)
+    page.locator("#patch-width").select_option("3")
+    with page.expect_request("**/api/compile"):
+        page.locator("#compile").click()
+    expect(page.locator("#compile")).to_have_text("Compiling…")
+    page.locator("#patch-width").select_option("7")
+    assert pending
+    route = pending.pop()
+    route.fulfill(response=route.fetch())
+    expect(page.locator("#compile-status strong")).to_have_text("Uncompiled changes")
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "true")
+    expect(page.locator("#inject-error")).to_be_disabled()
+    page.unroute("**/api/compile", hold_response)
+    page.locator("#compile").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "false")
+    # A failed lowering must leave the old topology disabled as well.
+    page.locator('[data-move-op="0"][data-direction="1"]').click()
+    page.locator("#compile").click()
+    expect(page.locator("#compile-status strong")).to_have_text("Assembly needs attention")
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "true")
+    page.locator("#undo").click()
+    expect(page.locator("#syndrome-svg")).to_have_attribute("aria-disabled", "false")
 
 
 if __name__ == "__main__":

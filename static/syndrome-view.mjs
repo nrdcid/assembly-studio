@@ -41,7 +41,7 @@ export function createSyndromeView(root, { onInject, onRemove, onClear, onRound 
 
   function render(state) {
     current = state;
-    const { snapshot, drawing, result, measurements, errors, fresh, message = "" } = state;
+    const { snapshot, drawing, result, measurements, errors, issues = [], fresh, message = "" } = state;
     $("syndrome-summary").textContent = result
       ? `${result.affectedChecks.length} nonzero syndromes · ${result.events.length} new detection events` : "";
     $("syndrome-history").replaceChildren();
@@ -49,7 +49,7 @@ export function createSyndromeView(root, { onInject, onRemove, onClear, onRound 
     svg.replaceChildren();
     svg.setAttribute("aria-disabled", String(!fresh || !result));
     $("syndrome-message").textContent = !fresh
-      ? "Compile the assembly to inspect qubits and inject errors."
+      ? `Compile the assembly to inspect qubits and inject errors. ${message}`
       : message;
     $("syndrome-round").textContent = snapshot
       ? `${snapshot.patch_id} · Patch round ${snapshot.patch_round} · Global round ${snapshot.round}` : "";
@@ -59,8 +59,17 @@ export function createSyndromeView(root, { onInject, onRemove, onClear, onRound 
     $("syndrome-errors").replaceChildren();
     for (const error of errors) {
       const row = document.createElement("li");
+      row.dataset.errorId = error.id;
+      const issue = issues.find((item) => item.id === error.id);
+      row.classList.toggle("invalid-injection", Boolean(issue));
       const description = document.createElement("span");
       description.textContent = `${error.pauli} · ${error.qubit} · before patch round ${error.before_patch_round}`;
+      if (issue) {
+        const reason = document.createElement("strong");
+        reason.className = "injection-issue";
+        reason.textContent = `Invalid: ${issue.message}`;
+        description.append(document.createElement("br"), reason);
+      }
       const remove = document.createElement("button");
       remove.className = "button ghost";
       remove.dataset.removeError = error.id;
