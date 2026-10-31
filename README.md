@@ -83,8 +83,47 @@ patch's stabilizer measurements), `data_qubits`, and `checks`:
   The compiler's red/blue mapping becomes X/Z; unsupported colors, unknown qubit
   references, and inconsistent weights raise compilation errors.
 
-This is topology only: error injection and syndrome calculations are not yet
-implemented. Existing renderer payloads and Python/MLIR exports are unchanged.
+The pure `static/syndrome.mjs` module calculates deterministic, error-induced
+syndromes from this topology. `calculateSyndrome(topology, errors, patchId,
+patchRound)` returns the selected global/local round, a `frame` mapping data-qubit
+IDs to `{x, z}` bits, a `syndrome` mapping check IDs to bits, and sorted
+`affectedChecks` IDs. `pauliToBits` and `composePaulis` implement Pauli algebra
+modulo global phase. X errors flip overlapping Z checks, Z errors flip X checks,
+and Y errors flip both. Multiple errors compose by XOR, including cancellation.
+
+Projects now save as version 2, with optional experiment metadata:
+
+```json
+"experiment": {
+  "errors": [
+    {
+      "id": "err_1",
+      "patch": "p0",
+      "qubit": "p0:d:2.5,2.5",
+      "pauli": "X",
+      "before_patch_round": 2
+    }
+  ]
+}
+```
+
+Each injection applies immediately before its one-based patch measurement round
+and persists until another error changes the frame. Interleaved rounds of other
+patches do not advance this schedule. Calculations validate all errors, including
+future injections, against compiled data-qubit references and actual patch rounds.
+Scenarios support up to 1024 injections with unique IDs and X/Y/Z Pauli types.
+The compile API also rejects invalid scenario references.
+
+Version-1 files and browser saves migrate to version 2 with `experiment.errors: []`;
+version-2 files may omit `experiment` for the same default. Browser storage keeps
+its original key so existing saves remain discoverable. Experiment metadata
+survives JSON save/load and undo/redo, and never changes logical operations,
+Python/MLIR exports, or renderer payloads. Geometry edits can invalidate saved
+qubit references; compilation reports those errors rather than reassigning them.
+
+These syndromes are idealized Pauli-frame calculations, not sampled hardware
+measurements. Injection controls and the interactive viewer are planned for PR 3;
+detection events and history are planned for PR 4.
 
 ## Verify
 
@@ -92,6 +131,7 @@ implemented. Existing renderer payloads and Python/MLIR exports are unchanged.
 uv pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests -q
 node tests/state.test.mjs
+node tests/syndrome.test.mjs
 .venv/bin/ruff check --config ruff.toml .
 .venv/bin/ruff format --check --config ruff.toml .
 ```

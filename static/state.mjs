@@ -1,6 +1,9 @@
+import { normaliseErrors } from "./syndrome.mjs";
+
 export function memoryExample() {
   return {
-    version: 1,
+    version: 2,
+    experiment: { errors: [] },
     name: "Quantum memory",
     patches: [
       {
@@ -24,13 +27,13 @@ export function memoryExample() {
 export function normaliseProject(value) {
   const fail = () => {
     throw new Error(
-      "This is not a supported Assembly Studio project (version 1).",
+      "This is not a supported Assembly Studio project (version 1 or 2).",
     );
   };
   const integer = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
   if (
     !value ||
-    value.version !== 1 ||
+    ![1, 2].includes(value.version) ||
     typeof value.name !== "string" ||
     !value.name.trim() ||
     value.name.length > 80 ||
@@ -77,9 +80,15 @@ export function normaliseProject(value) {
     )
       fail();
   }
+  if (value.version === 1 && Object.hasOwn(value, "experiment")) fail();
+  const experiment = Object.hasOwn(value, "experiment")
+    ? value.experiment : { errors: [] };
+  if (!experiment || typeof experiment !== "object" || Array.isArray(experiment)) fail();
+  const errors = normaliseErrors(experiment.errors);
   // Pick only project fields; never persist UI state or generated output.
   return {
-    version: 1,
+    version: 2,
+    experiment: { errors },
     name: value.name,
     patches: value.patches.map((p) => ({
       id: p.id,

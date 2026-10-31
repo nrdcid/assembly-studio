@@ -78,13 +78,49 @@ class MemoryOperation(StrictModel):
 Operation = Annotated[BasisOperation | MemoryOperation, Field(discriminator="kind")]
 
 
+class ErrorInjection(StrictModel):
+    """An analysis-only Pauli applied before a patch measurement round."""
+
+    id: str = Field(min_length=1, max_length=128)
+    patch: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
+    qubit: str = Field(min_length=1, max_length=128)
+    pauli: Literal["X", "Y", "Z"]
+    before_patch_round: int = Field(ge=1, le=MAX_ROUNDS)
+
+
+class Experiment(StrictModel):
+    """Error scenario, kept separate from the exported logical assembly."""
+
+    errors: list[ErrorInjection] = Field(max_length=1024)
+
+    @model_validator(mode="after")
+    def unique_ids(self) -> "Experiment":
+        """Keep injection identity unambiguous for editing and removal."""
+        if len({error.id for error in self.errors}) != len(self.errors):
+            msg = "Error injection IDs must be unique."
+            raise ValueError(msg)
+        return self
+
+
 class Project(StrictModel):
     """The editable source of truth, independent of generated rendering data."""
 
-    version: Literal[1]
+    version: Literal[2]
+    experiment: Experiment = Field(default_factory=lambda: Experiment(errors=[]))
     name: str = Field(min_length=1, max_length=80)
     patches: list[Patch] = Field(min_length=1, max_length=8)
     operations: list[Operation] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_v1(cls, value):
+        """Upgrade legacy files without modifying the caller's input."""
+        if isinstance(value, dict) and value.get("version") == 1:
+            if "experiment" in value:
+                msg = "Experiments require project version 2."
+                raise ValueError(msg)
+            return {**value, "version": 2}
+        return value
 
     @model_validator(mode="after")
     def valid_assembly(self) -> "Project":  # noqa: PLR0912
@@ -215,7 +251,7 @@ def compile_project(project: Project) -> dict:
         if not global_rounds[spec.id]:
             continue
         individual = Project(
-            version=1,
+            version=2,
             name=project.name,
             patches=[spec],
             operations=[op for op in project.operations if op.patch == spec.id],
@@ -233,6 +269,22 @@ def compile_project(project: Project) -> dict:
             patch_items.append(item)
     patch_items.sort(key=lambda item: item["round"])
     topology.sort(key=lambda item: item["round"])
+    for error in project.experiment.errors:
+        target = next(
+            (
+                item
+                for item in topology
+                if item["patch_id"] == error.patch
+                and item["patch_round"] == error.before_patch_round
+            ),
+            None,
+        )
+        if target is None:
+            msg = f"Error {error.id}: unknown patch or invalid injection round."
+            raise ValueError(msg)
+        if error.qubit not in {q["id"] for q in target["data_qubits"]}:
+            msg = f"Error {error.id}: unknown data qubit {error.qubit!r}."
+            raise ValueError(msg)
     return {
         "spacetime": get_visualisation_data(spacetime),
         "patches": {"type": "logical_patch", "ops": patch_items},

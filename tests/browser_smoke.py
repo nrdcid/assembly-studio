@@ -32,6 +32,19 @@ def main() -> None:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(args.url)
         expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+        # Existing browser storage is upgraded in place, using the original key.
+        page.evaluate("""() => {
+            const key = 'assembly-studio.project.v1';
+            const legacy = JSON.parse(localStorage.getItem(key));
+            legacy.version = 1;
+            delete legacy.experiment;
+            localStorage.setItem(key, JSON.stringify(legacy));
+        }""")
+        page.reload()
+        expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+        migrated = page.evaluate("JSON.parse(localStorage.getItem('assembly-studio.project.v1'))")
+        assert migrated["version"] == 2
+        assert migrated["experiment"] == {"errors": []}
         expect(page.locator("#compile-status strong + span")).to_contain_text(
             "Both visualization pipelines verified"
         )
@@ -90,6 +103,19 @@ def main() -> None:
         download_info.value.save_as(str(ARTIFACTS / "project.json"))
         saved = json.loads((ARTIFACTS / "project.json").read_text())
         assert saved["patches"][0]["x"] == 6
+        assert saved["version"] == 2
+        saved["experiment"] = {
+            "errors": [
+                {
+                    "id": "e1",
+                    "patch": "p0",
+                    "qubit": "p0:d:6.5,2.5",
+                    "pauli": "Y",
+                    "before_patch_round": 2,
+                }
+            ]
+        }
+        (ARTIFACTS / "project.json").write_text(json.dumps(saved))
 
         page.locator("#add-patch").click()
         expect(page.locator(".patch-item")).to_have_count(2)
@@ -113,6 +139,15 @@ def main() -> None:
         page.reload()
         expect(page.locator("#patch-name")).to_have_value('<img src=x onerror="alert(1)">')
         expect(page.locator("#compile-status strong")).to_have_text("Assembly compiled")
+        restored = page.evaluate("JSON.parse(localStorage.getItem('assembly-studio.project.v1'))")
+        assert restored["experiment"] == saved["experiment"]
+        with page.expect_download() as download_info:
+            page.locator("#save-project").click()
+        download_info.value.save_as(str(ARTIFACTS / "experiment.json"))
+        assert (
+            json.loads((ARTIFACTS / "experiment.json").read_text())["experiment"]
+            == saved["experiment"]
+        )
 
         page.locator("#load-example").click()
         expect(page.locator("#patch-name")).to_have_value("Memory patch")

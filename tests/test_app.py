@@ -3,45 +3,12 @@
 import copy
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 from deltakit_visualise import LogicalAssemblyVisualiser
-from fastapi.testclient import TestClient
 from xdsl.parser import Parser
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from app import Project, app, compile_project
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-@pytest.fixture
-def project():
-    return {
-        "version": 1,
-        "name": "Quantum memory",
-        "patches": [
-            {
-                "id": "p0",
-                "name": "Memory",
-                "width": 3,
-                "height": 3,
-                "x": 0,
-                "y": 0,
-                "vertical_z": True,
-            },
-        ],
-        "operations": [
-            {"kind": "prepare", "patch": "p0", "basis": "Z"},
-            {"kind": "memory", "patch": "p0", "rounds": 3},
-            {"kind": "measure", "patch": "p0", "basis": "Z"},
-        ],
-    }
+from app import Project, compile_project
 
 
 def test_memory_compiles_into_both_real_visualisation_payloads(client, project):
@@ -129,7 +96,7 @@ def test_invalid_assemblies_return_actionable_errors(client, project, mutation, 
         lambda p: p["operations"][1].update(rounds=65),
         lambda p: p["operations"][0].update(basis="Y"),
         lambda p: p["operations"][1].update(kind="python", code="print('bad')"),
-        lambda p: p.update(version=2),
+        lambda p: p.update(version=3),
         lambda p: p.update(patches=[]),
         lambda p: p.update(operations=p["operations"] * 30),
         lambda p: p["operations"][1].update(rounds=3.5),
