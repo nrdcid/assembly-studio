@@ -1,0 +1,11 @@
+vendor/
+artifacts/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.cocoindex_code/
+.env
+# CocoIndex Code (ccc)
+/.cocoindex_code/

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f5f8" />
+    <title>Assembly Studio · Deltakit</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script type="module" src="/static/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Assembly Studio home"
+        ><span class="brand-mark">Δ</span
+        ><span>assembly<span class="brand-light">studio</span></span></a
+      >
+      <span class="pilot-tag">PILOT / 01</span>
+      <div class="topbar-actions">
+        <button id="open-project" class="button ghost">Open project</button>
+        <button id="save-project" class="button ghost">
+          Save project <span aria-hidden="true">↗</span>
+        </button>
+        <button id="export-project" class="button dark">
+          Export code <span aria-hidden="true">↓</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="project-heading">
+        <div>
+          <div class="eyebrow">DELTAKIT / LOGICAL ASSEMBLY</div>
+          <input
+            id="project-name"
+            aria-label="Project name"
+            maxlength="80"
+            value="Quantum memory"
+          />
+          <p>
+            Build a patch. Define its lifetime. Explore it in space and time.
+          </p>
+        </div>
+        <div class="project-meta">
+          <span class="status-dot"></span
+          ><span id="save-status">Saved on this device</span
+          ><span class="divider"></span
+          ><button id="load-example" class="text-button">
+            Load example ↗
+          </button>
+        </div>
+      </section>
+
+      <div class="workbench">
+        <aside class="panel inspector">
+          <div class="panel-heading">
+            <h2>Assembly</h2>
+            <span class="section-number">01</span>
+          </div>
+          <div class="inspector-section">
+            <div class="section-title">
+              <h3>Patches</h3>
+              <span id="patch-count" class="count">1 / 8</span>
+            </div>
+            <div id="patch-list"></div>
+            <button id="add-patch" class="button add-button">
+              ＋ Add patch
+            </button>
+          </div>
+          <div class="inspector-section" id="patch-properties">
+            <div class="section-title">
+              <h3>Patch properties</h3>
+              <span id="selected-id" class="mono">p0</span>
+            </div>
+            <label>Label<input id="patch-name" maxlength="48" /></label>
+            <div class="field-pair">
+              <label
+                >Width<select id="patch-width">
+                  <option>3</option>
+                  <option>5</option>
+                  <option>7</option>
+                  <option>9</option>
+                  <option>11</option>
+                </select></label
+              ><label
+                >Height<select id="patch-height">
+                  <option>3</option>
+                  <option>5</option>
+                  <option>7</option>
+                  <option>9</option>
+                  <option>11</option>
+                </select></label
+              >
+            </div>
+            <div class="field-pair">
+              <label
+                >Position X<input
+                  id="patch-x"
+                  type="number"
+                  min="0"
+                  max="29"
+                  step="1" /></label
+              ><label
+                >Position Y<input
+                  id="patch-y"
+                  type="number"
+                  min="0"
+                  max="29"
+                  step="1"
+              /></label>
+            </div>
+            <label
+              >Z boundary orientation<select id="patch-orientation">
+                <option value="true">Vertical Z</option>
+                <option value="false">Horizontal Z</option>
+              </select></label
+            >
+            <button id="delete-patch" class="text-button danger">
+              Remove patch
+            </button>
+          </div>
+          <div class="inspector-foot">
+            <span class="small-mark">Δ</span>
+            <p>
+              Rotated planar surface codes<br /><span
+                >Odd dimensions · X / Z bases</span
+              >
+            </p>
+          </div>
+        </aside>
+
+        <section class="panel layout-panel">
+          <div class="panel-heading">
+            <div class="heading-with-icon">
+              <h2>Patch layout</h2>
+              <span class="muted small">32 × 32 grid</span>
+            </div>
+            <div class="icon-actions">
+              <button
+                id="undo"
+                class="icon-button"
+                title="Undo (Ctrl/⌘ Z)"
+                aria-label="Undo"
+              >
+                ↶</button
+              ><button
+                id="redo"
+                class="icon-button"
+                title="Redo (Ctrl/⌘ Shift Z)"
+                aria-label="Redo"
+              >
+                ↷
+              </button>
+            </div>
+          </div>
+          <div class="layout-canvas">
+            <svg
+              id="layout"
+              viewBox="0 0 680 680"
+              role="img"
+              aria-label="Editable patch layout. Select a patch to edit its position."
+            ></svg>
+            <div class="canvas-caption">
+              <span><span class="legend-dot blue"></span> Logical patch</span
+              ><span>Drag to move · Select to edit</span>
+            </div>
+          </div>
+          <div class="layout-summary">
+            <span id="layout-summary">1 patch · 9 data qubits</span
+            ><span class="mono" id="geometry-status">GEOMETRY READY</span>
+          </div>
+        </section>
+
+        <section class="panel preview-panel">
+          <div class="panel-heading">
+            <h2>Live preview</h2>
+            <span class="section-number">02</span>
+          </div>
+          <div class="preview-tabs" role="tablist" aria-label="Visualization">
+            <button
+              id="tab-spacetime"
+              role="tab"
+              aria-selected="true"
+              class="active"
+            >
+              Spacetime <span>3D</span></button
+            ><button id="tab-patches" role="tab" aria-selected="false">
+              Surface code <span>2D</span>
+            </button>
+          </div>
+          <div class="viewer-wrap" id="viewer-wrap">
+            <iframe
+              id="viewer"
+              title="Deltakit spacetime visualization"
+              src="/viewer"
+            ></iframe>
+            <div id="preview-empty" class="preview-empty" hidden>
+              <span class="empty-orbit">◇</span>
+              <h3>Your assembly, visualized</h3>
+              <p>
+                Add a patch and a stabiliser operation,<br />then compile your
+                assembly.
+              </p>
+            </div>
+            <span class="viewer-badge" id="viewer-badge">SPACE + TIME</span>
+          </div>
+          <div class="round-control">
+            <button
+              id="play-rounds"
+              class="icon-button"
+              title="Play rounds"
+              aria-label="Play rounds"
+            >
+              ▶</button
+            ><label for="round-slider" class="mono"
+              >ROUND <span id="round-value">01</span
+              ><span class="muted">
+                / <span id="round-total">03</span></span
+              ></label
+            ><input
+              id="round-slider"
+              type="range"
+              min="1"
+              max="3"
+              value="1"
+              aria-label="Selected stabiliser round"
+            /><span id="round-patch" class="round-patch">p0</span>
+          </div>
+          <div class="preview-note">
+            <span class="legend-dot teal"></span
+            ><span id="preview-note"
+              >Inspect the geometry in 3D. Drag to orbit; scroll to zoom.</span
+            >
+          </div>
+        </section>
+
+        <section class="panel timeline-panel">
+          <div class="panel-heading">
+            <div class="heading-with-icon">
+              <h2>Operation timeline</h2>
+              <span class="muted small">Sequential execution</span>
+            </div>
+            <span id="operation-count" class="mono muted">3 OPERATIONS</span>
+          </div>
+          <div id="operation-list" class="operation-list"></div>
+          <form id="add-operation" class="operation-composer">
+            <span class="composer-label">ADD OPERATION</span
+            ><label class="sr-only" for="op-kind">Operation type</label
+            ><select id="op-kind">
+              <option value="prepare">Prepare</option>
+              <option value="memory" selected>Measure stabilisers</option>
+              <option value="measure">Measure logical</option></select
+            ><label class="sr-only" for="op-patch">Patch</label
+            ><select id="op-patch"></select
+            ><label id="op-basis-label"
+              >Basis<select id="op-basis">
+                <option>Z</option>
+                <option>X</option>
+              </select></label
+            ><label id="op-rounds-label"
+              >Rounds<input
+                id="op-rounds"
+                type="number"
+                min="1"
+                max="64"
+                value="3" /></label
+            ><button type="submit" class="button dark">＋ Add</button>
+          </form>
+        </section>
+      </div>
+
+      <section class="compile-bar">
+        <div
+          id="compile-status"
+          class="compile-status"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="status-dot"></span>
+          <div>
+            <strong>Ready to compile</strong
+            ><span>Your changes are saved automatically on this device.</span>
+          </div>
+        </div>
+        <button id="compile" class="button compile-button">
+          Compile assembly <span aria-hidden="true">→</span>
+        </button>
+      </section>
+      <footer>
+        <span
+          >ASSEMBLY STUDIO
+          <span class="muted">/ POWERED BY DELTAKIT</span></span
+        ><span>Geometry and IR checks · Fault tolerance is not certified</span
+        ><button id="help" class="text-button">About this pilot ↗</button>
+      </footer>
+    </main>
+
+    <input
+      type="file"
+      id="project-file"
+      accept=".json,application/json"
+      hidden
+    />
+    <dialog id="export-dialog">
+      <div class="dialog-heading">
+        <div>
+          <div class="eyebrow">TAKE YOUR ASSEMBLY FURTHER</div>
+          <h2>Export code</h2>
+        </div>
+        <button
+          class="icon-button"
+          data-close="export-dialog"
+          aria-label="Close export"
+        >
+          ×
+        </button>
+      </div>
+      <p>Use this assembly in your own Deltakit workflow.</p>
+      <div class="export-tabs">
+        <button class="button dark" id="export-python-tab">Python</button
+        ><button class="button ghost" id="export-mlir-tab">
+          Logical Assembly IR
+        </button>
+      </div>
+      <pre id="export-code" tabindex="0"></pre>
+      <div class="dialog-actions">
+        <button class="button ghost" id="copy-code">Copy code</button
+        ><button class="button dark" id="download-code">Download .py ↓</button>
+      </div>
+    </dialog>
+    <dialog id="help-dialog">
+      <div class="dialog-heading">
+        <h2>A small assembly workbench</h2>
+        <button
+          class="icon-button"
+          data-close="help-dialog"
+          aria-label="Close help"
+        >
+          ×
+        </button>
+      </div>
+      <p>
+        Place up to eight rotated-planar patches, then define their preparation,
+        stabiliser rounds, and logical measurement in order.
+      </p>
+      <p>
+        <strong>Operations execute sequentially.</strong> Patches must be
+        prepared before use. Logical measurement ends a patch's lifetime. The
+        pilot supports X and Z bases and up to 64 total stabiliser rounds.
+      </p>
+      <p>
+        The surface-code view shows the patch receiving stabiliser measurements
+        at the selected round. The spacetime view shows the complete assembly.
+        Both use the real Deltakit compiler and renderer.
+      </p>
+      <p>
+        Projects are saved in this browser and can be downloaded as JSON. Code
+        exports contain the editable assembly, before visualization passes.
+        Geometry checks and successful IR verification do not certify logical
+        correctness or fault tolerance.
+      </p>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

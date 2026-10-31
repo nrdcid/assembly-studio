@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deltakit preview</title>
+    <style>
+      html,
+      body,
+      #app {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #fff;
+      }
+      #error {
+        font: 12px/1.7 system-ui;
+        color: #8b6670;
+        padding: 60px 30px;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="error" hidden></div>
+    <script src="/renderer.js"></script>
+    <script>
+      let latestData;
+      let instance;
+      function render(data) {
+        latestData = data;
+        if (typeof Deltakit === "undefined") {
+          document.getElementById("error").hidden = false;
+          document.getElementById("error").textContent =
+            "Renderer assets are missing. Run python assembly-studio/setup_renderer.py, then reload.";
+          parent.postMessage(
+            {
+              type: "studio-renderer-error",
+              message:
+                "Renderer assets are missing. Run the renderer setup script, then reload.",
+            },
+            location.origin,
+          );
+          return;
+        }
+        try {
+          instance = new Deltakit("app");
+          instance.render(data);
+          parent.postMessage({ type: "studio-rendered" }, location.origin);
+        } catch (error) {
+          parent.postMessage(
+            { type: "studio-renderer-error", message: error.message },
+            location.origin,
+          );
+        }
+      }
+      window.addEventListener("message", (event) => {
+        if (event.origin !== location.origin || event.source !== parent) return;
+        if (event.data?.type === "studio-render") render(event.data.payload);
+      });
+      parent.postMessage({ type: "studio-viewer-ready" }, location.origin);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+extend = "ruff-base.toml"
+include = ["*.py", "tests/*.py"]
+
+[lint.per-file-ignores]
+"setup_renderer.py" = ["T201"]
+"*.py" = ["INP001"]
+"test_app.py" = ["CPY001"]
+"browser_smoke.py" = ["PLR0915", "T201"]
