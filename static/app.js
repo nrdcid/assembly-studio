@@ -4,6 +4,8 @@ import {
   normaliseProject,
   deletePatch,
 } from "./state.mjs";
+import { calculateSyndrome } from "./syndrome.mjs";
+import { createSyndromeView } from "./syndrome-view.mjs";
 
 const $ = (id) => document.getElementById(id);
 const escape = (value) =>
@@ -35,6 +37,25 @@ let viewerRevision = 0;
 let exportFormat = "python";
 let toastTimer;
 let drag = null;
+const syndromeView = createSyndromeView($("syndrome-panel"), {
+  onInject(qubit, pauli, snapshot) {
+    if (!isFresh()) return;
+    edit((project) => {
+      project.experiment.errors.push({
+        id: crypto.randomUUID(), patch: snapshot.patch_id, qubit, pauli,
+        before_patch_round: snapshot.patch_round,
+      });
+    });
+  },
+  onRemove(id) {
+    edit((project) => {
+      project.experiment.errors = project.experiment.errors.filter((error) => error.id !== id);
+    });
+  },
+  onClear() {
+    edit((project) => { project.experiment.errors = []; });
+  },
+});
 
 function toast(message) {
   $("toast").textContent = message;
@@ -52,7 +73,10 @@ function status(title, message, state = "") {
 }
 
 function currentSource() {
-  return JSON.stringify(history.current);
+  // Experiment changes use the compiled topology locally; only assembly edits
+  // invalidate geometry and exports, including when traversing undo/redo.
+  const { experiment, ...assembly } = history.current;
+  return JSON.stringify(assembly);
 }
 function isFresh() {
   return compiled && compiledSource === currentSource();
@@ -62,7 +86,7 @@ function updatePreviewBadge() {
   $("viewer-badge").textContent = isFresh()
     ? activeView === "spacetime"
       ? "SPACE + TIME"
-      : "SURFACE CODE"
+      : activeView === "syndrome" ? "SYNDROME" : "SURFACE CODE"
     : "PREVIEW OUTDATED · COMPILE TO UPDATE";
 }
 
@@ -82,6 +106,7 @@ function changed() {
   $("round-slider").disabled = !isFresh();
   $("play-rounds").disabled = !isFresh();
   updatePreviewBadge();
+  renderSyndrome();
   if (!isFresh())
     status(
       "Uncompiled changes",
@@ -230,7 +255,7 @@ function errorMessage(body) {
 async function compile() {
   if (compilePromise) return compilePromise;
   const project = history.current;
-  const source = JSON.stringify(project);
+  const source = currentSource();
   $("compile").disabled = true;
   $("compile").textContent = "Compiling…";
   status(
@@ -242,7 +267,7 @@ async function compile() {
       const response = await fetch("/api/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: source,
+        body: JSON.stringify(project),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(errorMessage(result));
@@ -285,7 +310,7 @@ async function compile() {
 }
 
 function payload() {
-  if (!compiled) return null;
+  if (!compiled || activeView === "syndrome") return null;
   return activeView === "spacetime"
     ? compiled.spacetime
     : {
@@ -304,6 +329,7 @@ function sendToViewer() {
 }
 
 function refreshViewer() {
+  if (activeView === "syndrome") return;
   // A fresh iframe releases the previous renderer's canvas, listeners, and WebGL context.
   viewerReady = false;
   $("viewer").src = `/viewer?revision=${++viewerRevision}`;
@@ -325,14 +351,32 @@ function updateRound() {
   $("round-slider").value = round;
   $("round-patch").textContent = roundOwner();
   renderEditor();
+  renderSyndrome();
+}
+
+function renderSyndrome() {
+  const snapshot = compiled?.topology.find((item) => item.round === round);
+  const drawing = compiled?.patches.ops.find((item) => item.round === round);
+  const errors = history.current.experiment.errors;
+  let result = null, message = "";
+  if (isFresh() && snapshot) {
+    try {
+      result = calculateSyndrome(compiled.topology, errors, snapshot.patch_id, snapshot.patch_round);
+    } catch (error) {
+      message = error.message + " Remove or clear invalid injections to continue.";
+    }
+  }
+  syndromeView.render({ snapshot, drawing, result, errors, fresh: isFresh(), message });
 }
 
 function switchView(view) {
   activeView = view;
-  for (const key of ["spacetime", "patches"]) {
+  for (const key of ["spacetime", "patches", "syndrome"]) {
     $(`tab-${key}`).classList.toggle("active", view === key);
     $(`tab-${key}`).setAttribute("aria-selected", String(view === key));
   }
+  $("viewer").hidden = view === "syndrome";
+  $("syndrome-panel").hidden = view !== "syndrome";
   $("viewer").title =
     view === "spacetime"
       ? "Deltakit spacetime visualization"
@@ -341,7 +385,10 @@ function switchView(view) {
   $("preview-note").textContent =
     view === "spacetime"
       ? "Inspect the geometry in 3D. Drag to orbit; scroll to zoom."
-      : "Stabilisers and qubits for the patch active at this round.";
+      : view === "syndrome"
+        ? "Select a qubit or check. Errors apply before the selected patch round."
+        : "Stabilisers and qubits for the patch active at this round.";
+  renderSyndrome();
   refreshViewer();
 }
 
@@ -640,6 +687,7 @@ $("layout").addEventListener("keydown", (event) => {
 $("compile").addEventListener("click", compile);
 $("tab-spacetime").addEventListener("click", () => switchView("spacetime"));
 $("tab-patches").addEventListener("click", () => switchView("patches"));
+$("tab-syndrome").addEventListener("click", () => switchView("syndrome"));
 $("round-slider").addEventListener("input", (event) => {
   stopPlayback();
   round = Number(event.target.value);
@@ -652,7 +700,7 @@ $("play-rounds").addEventListener("click", () => {
     return;
   }
   if (!isFresh()) return;
-  if (activeView !== "patches") switchView("patches");
+  if (activeView === "spacetime") switchView("patches");
   $("play-rounds").textContent = "Ⅱ";
   $("play-rounds").setAttribute("aria-label", "Pause rounds");
   playing = setInterval(() => {

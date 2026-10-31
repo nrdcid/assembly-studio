@@ -186,6 +186,9 @@
             ><button id="tab-patches" role="tab" aria-selected="false">
               Surface code <span>2D</span>
             </button>
+            <button id="tab-syndrome" role="tab" aria-selected="false" aria-controls="syndrome-panel">
+              Syndrome
+            </button>
           </div>
           <div class="viewer-wrap" id="viewer-wrap">
             <iframe
@@ -193,6 +196,23 @@
               title="Deltakit spacetime visualization"
               src="/viewer"
             ></iframe>
+            <section id="syndrome-panel" role="tabpanel" aria-labelledby="tab-syndrome" hidden>
+              <p id="syndrome-round" class="mono"></p>
+              <p id="syndrome-message" role="status"></p>
+              <svg id="syndrome-svg" aria-label="Physical data qubits and stabilizer checks"></svg>
+              <p class="syndrome-legend">X: solid red · Z: dashed blue · Bold outline + !: syndrome 1<br>
+                ● data · ◇ ancilla · X/Y/Z beside a qubit: accumulated error</p>
+              <div id="syndrome-inspector" aria-live="polite"></div>
+              <div class="syndrome-injection">
+                <label for="inject-pauli">Pauli error</label>
+                <select id="inject-pauli"><option>X</option><option>Y</option><option>Z</option></select>
+                <button id="inject-error" class="button" disabled>Inject before this round</button>
+              </div>
+              <div class="syndrome-error-heading"><strong>Injections · all patches</strong>
+                <button id="clear-errors" class="button ghost" disabled>Clear all</button></div>
+              <ul id="syndrome-errors"></ul>
+              <p class="syndrome-legend">Idealized error-induced syndromes, not sampled measurements.</p>
+            </section>
             <div id="preview-empty" class="preview-empty" hidden>
               <span class="empty-orbit">◇</span>
               <h3>Your assembly, visualized</h3>

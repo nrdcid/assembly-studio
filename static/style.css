@@ -999,3 +999,36 @@ pre {
     padding: 9px 12px;
   }
 }
+
+/* The syndrome view lives alongside, rather than inside, the renderer iframe. */
+#syndrome-panel { padding: 34px 18px 16px; }
+#syndrome-round { font-size: 11px; color: #3e5d94; }
+#syndrome-message { font-size: 12px; color: #a04c38; }
+#syndrome-message:empty { display: none; }
+#syndrome-svg { display: block; width: 100%; height: 330px; }
+#syndrome-svg[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+#syndrome-svg [role="button"] { cursor: pointer; outline: none; }
+.syndrome-check polygon { stroke-width: .025; fill-opacity: .22; }
+.syndrome-check.basis-X polygon { fill: #cf7272; stroke: #a34848; }
+.syndrome-check.basis-Z polygon { fill: #719bdd; stroke: #3b65a5; stroke-dasharray: .07 .04; }
+.syndrome-check text { font-size: .16px; fill: #273954; font-weight: 700; }
+.syndrome-check[data-syndrome="1"] polygon { stroke: #ad4800; stroke-width: .07; }
+.syndrome-check[aria-pressed="true"] polygon, .syndrome-check:focus-visible polygon { fill-opacity: .55; }
+.syndrome-ancilla path { fill: white; stroke: #627086; stroke-width: .025; }
+.syndrome-ancilla[aria-pressed="true"] path, .syndrome-ancilla:focus-visible path { fill: #ffa338; }
+.qubit-hit { fill: transparent; }
+.qubit-dot { fill: #fff; stroke: #43536c; stroke-width: .035; }
+.syndrome-qubit.in-support .qubit-dot { fill: #ffd66a; }
+.syndrome-qubit[aria-pressed="true"] .qubit-dot, .syndrome-qubit:focus-visible .qubit-dot { stroke: #ba4e00; stroke-width: .065; }
+.error-marker { font-size: .19px; font-weight: 800; fill: #9e3900; paint-order: stroke; stroke: white; stroke-width: .03; }
+.syndrome-legend { font-size: 11px; color: #637187; line-height: 1.6; }
+#syndrome-inspector { padding: 12px; background: #f3f6fa; border-radius: 6px; font-size: 12px; overflow-wrap: anywhere; }
+#syndrome-inspector p { margin: 7px 0; }
+#syndrome-inspector .button { margin: 3px; }
+.syndrome-injection, .syndrome-error-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 12px; }
+.syndrome-injection select { width: auto; }
+.syndrome-error-heading { justify-content: space-between; }
+#syndrome-errors { list-style: none; padding: 0; max-height: 160px; overflow-y: auto; font-size: 11px; }
+#syndrome-errors li { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
+#syndrome-errors li span { overflow-wrap: anywhere; min-width: 0; }
+#syndrome-errors button { flex-shrink: 0; }

@@ -37,9 +37,17 @@ checkout is required. Development dependencies are in `requirements-dev.txt`.
    operation is highlighted. Drag the 3D view to orbit; scroll to zoom.
 4. Save/open project JSON, or export executable Python and Logical Assembly MLIR.
    Undo/redo works with buttons and Ctrl/⌘ Z / Ctrl/⌘ Shift Z.
+5. Open **Syndrome** to select physical data qubits, ancillas, or X/Z checks.
+   Check selection highlights its data support and shows its weight and syndrome
+   bit. Select a data qubit, choose X/Y/Z, and inject before the displayed patch
+   round. Scrub rounds to see the accumulated error and affected checks. Remove
+   individual injections or clear all; these edits also support undo/redo.
 
-The editable project is the source of truth. Changes invalidate the current
-preview; export recompiles when needed. Projects auto-save in this browser's
+The editable project is the source of truth. Assembly changes invalidate the current
+preview; export recompiles when needed. Experiment edits update the Syndrome view
+locally without recompiling or reloading either Deltakit renderer. Stale geometry
+disables qubit selection and injection until recompilation succeeds, while remove
+and clear remain available to repair invalid scenarios. Projects auto-save in this browser's
 local storage. Download JSON to move a project between browsers or devices.
 
 Running an exported Python file prints its Logical Assembly IR. Its `program`
@@ -122,8 +130,12 @@ Python/MLIR exports, or renderer payloads. Geometry edits can invalidate saved
 qubit references; compilation reports those errors rather than reassigning them.
 
 These syndromes are idealized Pauli-frame calculations, not sampled hardware
-measurements. Injection controls and the interactive viewer are planned for PR 3;
-detection events and history are planned for PR 4.
+measurements. The Syndrome tab uses a dedicated SVG in the parent page. X/Z labels
+and solid/dashed borders distinguish checks, bold outlines and `!` mark syndrome
+bits of 1, and X/Y/Z markers show the accumulated error at data qubits. Ancillas
+are diamonds and cannot receive injections. Qubits and checks support keyboard
+selection with Tab and Enter/Space. Detection events and history remain planned
+for PR 4.
 
 ## Verify
 
@@ -146,8 +158,12 @@ For browser verification, start the server, then:
 ```bash
 .venv/bin/python -m playwright install chromium
 .venv/bin/python tests/browser_smoke.py
+.venv/bin/python tests/syndrome_browser.py --url http://127.0.0.1:8010 --browser /path/to/chromium
 ```
 
 The browser check exercises compilation, geometry editing, undo/redo, round
 scrubbing, both real renderers, errors, project downloads/import, and code exports.
 Screenshots are saved under ignored `artifacts/`.
+The syndrome browser check covers X/Y/Z injection, compiler-derived support
+highlighting, local updates without recompilation, round scrubbing, patch isolation,
+ancilla restrictions, keyboard selection, stale previews, undo/redo, and reloads.
