@@ -60,7 +60,7 @@ variable can also be imported into a Deltakit compilation or visualization workf
   Python execution/import, accounts, or shared project storage.
 
 `POST /api/compile` accepts bounded structured project JSON and returns `spacetime`,
-`patches`, `rounds`, `python`, and `mlir`. It builds a fresh program per request,
+`patches`, `topology`, `rounds`, `python`, and `mlir`. It builds a fresh program per request,
 clones the IR for spacetime rendering, and does not use the library's
 shared HTML cache or start a separate server per project. Project errors return
 HTTP 422 with an explanation. The pilot binds to localhost by default.
@@ -69,6 +69,22 @@ The current compiler's combined lowering of independent patches can produce nest
 allocations that fail IR verification. This pilot lowers each independent memory
 patch separately, verifies the resulting IR, and maps its snapshots back to global
 timeline rounds. The full logical assembly still drives spacetime and code exports.
+
+`topology` is a list sorted by global `round`. Each entry contains `patch_id`,
+the one-based global `round`, the one-based `patch_round` (counting only that
+patch's stabilizer measurements), `data_qubits`, and `checks`:
+
+- Data qubits have an `id` and a two-dimensional `position` in compiler workspace
+  coordinates. IDs use `patch_id:d:x,y`; moving a patch changes these IDs.
+- Checks have an `id`, explicit `basis` (`X` or `Z`), `weight`, and a sorted list
+  of `data_qubits` IDs. Their IDs encode the patch, basis, and sorted support.
+  IDs survive round changes and renderer element reordering or renumbering.
+- Supports come directly from compiler plaquettes, with drawing ancillas removed.
+  The compiler's red/blue mapping becomes X/Z; unsupported colors, unknown qubit
+  references, and inconsistent weights raise compilation errors.
+
+This is topology only: error injection and syndrome calculations are not yet
+implemented. Existing renderer payloads and Python/MLIR exports are unchanged.
 
 ## Verify
 

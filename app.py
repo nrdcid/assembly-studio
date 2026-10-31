@@ -18,6 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from xdsl.utils.exceptions import VerifyException
 
+from qec.topology import extract_topology
+
 BASE_DIR = Path(__file__).resolve().parent
 MAX_ROUNDS = 64
 
@@ -208,6 +210,7 @@ def compile_project(project: Project) -> dict:
             )
             current_round += operation.rounds
     patch_items = []
+    topology = []
     for spec in project.patches:
         if not global_rounds[spec.id]:
             continue
@@ -224,12 +227,16 @@ def compile_project(project: Project) -> dict:
         PatchVisualisationPipeline().apply(patch_visualiser.context, patch_module)
         patch_module.verify()
         for item in get_visualisation_data(patch_module)["ops"]:
-            item["round"] = global_rounds[spec.id][item["round"] - 1]
+            patch_round = item["round"]
+            item["round"] = global_rounds[spec.id][patch_round - 1]
+            topology.append(extract_topology(item, patch_id=spec.id, patch_round=patch_round))
             patch_items.append(item)
     patch_items.sort(key=lambda item: item["round"])
+    topology.sort(key=lambda item: item["round"])
     return {
         "spacetime": get_visualisation_data(spacetime),
         "patches": {"type": "logical_patch", "ops": patch_items},
+        "topology": topology,
         "rounds": sum(op.rounds for op in project.operations if op.kind == "memory"),
         "python": python_source,
         "mlir": mlir,
